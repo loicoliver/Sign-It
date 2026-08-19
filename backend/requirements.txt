@@ -1,0 +1,17 @@
+# Sign It - Backend Python Dependencies
+
+# Core Web & API Framework
+Django==6.1
+djangorestframework==3.18.0
+djangorestframework-simplejwt==5.5.1
+django-cors-headers==4.9.0
+
+# Cryptography & Security
+cryptography==50.0.0
+PyJWT==2.13.0
+cffi==2.1.1
+
+# Utilities & Database Support
+asgiref==3.12.1
+sqlparse==0.6.0
+tzdata==2026.3
