@@ -25,7 +25,7 @@ export default function RegisterScreen({ navigation }: any) {
       console.log("[Register] Clés générées avec succès !");
 
       setStatusText('🔒 Sauvegarde de la clé privée sur le téléphone...');
-      await savePrivateKey(keypair.privateKeyPem);
+      await savePrivateKey(keypair.privateKeyPem, username.trim());
 
       setStatusText('🌐 Envoi de la clé publique au serveur...');
       console.log("[Register] Envoi de la clé publique au serveur backend...");

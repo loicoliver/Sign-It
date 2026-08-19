@@ -76,6 +76,16 @@ export const api = {
     return res.json();
   },
 
+  async updatePublicKey(publicKeyPem: string) {
+    const res = await fetchWithFallback('/auth/profile/', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ public_key: publicKeyPem })
+    });
+    if (!res.ok) throw new Error('Impossible de mettre à jour la clé publique');
+    return res.json();
+  },
+
   async getUsers() {
     const res = await fetchWithFallback('/users/');
     if (!res.ok) throw new Error('Impossible de charger les utilisateurs');

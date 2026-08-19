@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, FlatList } from 'react-native';
 import { api } from '../services/api';
 import { authenticateWithBiometrics } from '../services/biometrics';
-import { getPrivateKey } from '../services/secureStore';
-import { signPayload } from '../services/crypto';
+import { getPrivateKey, savePrivateKey } from '../services/secureStore';
+import { signPayload, generateKeyPair } from '../services/crypto';
 
 export default function DocumentDetailScreen({ route, navigation }: any) {
   const { documentId } = route.params;
@@ -58,7 +58,7 @@ export default function DocumentDetailScreen({ route, navigation }: any) {
   const handleAuthorizeUser = async (userId: number, username: string) => {
     try {
       await api.authorizeSigner(documentId, userId);
-      Alert.alert('Succès', `Utilisateur ${username} ajouté comme signataire autorise !`);
+      Alert.alert('Succès', `Utilisateur ${username} ajouté comme signataire autorisé !`);
       setUsersModalVisible(false);
       loadDetails();
     } catch (err: any) {
@@ -78,13 +78,45 @@ export default function DocumentDetailScreen({ route, navigation }: any) {
       }
 
       // 2. Récupérer la clé privée sur le téléphone
-      const privateKeyPem = await getPrivateKey();
+      let privateKeyPem = await getPrivateKey(profile?.username);
+
       if (!privateKeyPem) {
-        Alert.alert('Erreur Clé Privée', 'Clé privée introuvable sur cet appareil. Veuillez vous réinscrire.');
-        setSigning(false);
+        // Option pour générer automatiquement les clés pour cet appareil
+        Alert.alert(
+          'Clé privée introuvable 🔑',
+          `Aucune clé privée conservée pour "${profile?.username}" sur cet appareil.\n\nSouhaitez-vous générer une nouvelle paire de clés pour ce compte ?`,
+          [
+            { text: 'Annuler', style: 'cancel', onPress: () => setSigning(false) },
+            {
+              text: 'Générer mes clés',
+              onPress: async () => {
+                try {
+                  const keypair = await generateKeyPair(1024);
+                  await savePrivateKey(keypair.privateKeyPem, profile?.username);
+                  await api.updatePublicKey(keypair.publicKeyPem);
+                  Alert.alert('Succès', 'Nouvelle clé privée générée et clé publique enregistrée sur le serveur !');
+                  // Réessayer la signature avec la nouvelle clé
+                  executeSigningProcess(keypair.privateKeyPem);
+                } catch (e: any) {
+                  Alert.alert('Erreur', e.message || 'Échec de génération de clés.');
+                  setSigning(false);
+                }
+              }
+            }
+          ]
+        );
         return;
       }
 
+      await executeSigningProcess(privateKeyPem);
+    } catch (err: any) {
+      Alert.alert('Échec de la signature', err.message || 'Une erreur est survenue.');
+      setSigning(false);
+    }
+  };
+
+  const executeSigningProcess = async (privateKeyPem: string) => {
+    try {
       // 3. Déterminer le payload à signer (Dépendance de la dernière signature)
       const lastSignature = document.signatures?.[document.signatures.length - 1];
       let payloadToSign = document.file_hash;
