@@ -1,0 +1,33 @@
+# Python / Virtualenv
+venv/
+backend/venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Database & Media
+*.sqlite3
+backend/db.sqlite3
+backend/media/documents/*
+!backend/media/documents/.gitkeep
+
+# Node / React Native / Expo
+node_modules/
+mobile/node_modules/
+.expo/
+mobile/.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Logs
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# IDEs & System files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
