@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, FlatList } from 'react-native';
 import { api } from '../services/api';
-import { authenticateWithBiometrics } from '../services/biometrics';
 import { getPrivateKey, savePrivateKey } from '../services/secureStore';
 import { signPayload, generateKeyPair } from '../services/crypto';
+import { verifyPinForUser } from '../services/pinService';
+import PinModal from '../components/PinModal';
 
 export default function DocumentDetailScreen({ route, navigation }: any) {
   const { documentId } = route.params;
@@ -20,6 +21,10 @@ export default function DocumentDetailScreen({ route, navigation }: any) {
   const [verifyModalVisible, setVerifyModalVisible] = useState(false);
   const [verifyResult, setVerifyResult] = useState<any>(null);
   const [verifying, setVerifying] = useState(false);
+
+  // PIN Modal
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [pinError, setPinError] = useState('');
 
   // Signing state
   const [signing, setSigning] = useState(false);
@@ -66,36 +71,46 @@ export default function DocumentDetailScreen({ route, navigation }: any) {
     }
   };
 
-  const handleSignDocument = async () => {
-    setSigning(true);
-    try {
-      // 1. Authentification biométrique simulée / réelle
-      const bioRes = await authenticateWithBiometrics("Authentification biométrique requise pour signer le document");
-      if (!bioRes.success) {
-        Alert.alert('Annulé', bioRes.message);
-        setSigning(false);
-        return;
-      }
+  const handleSignDocument = () => {
+    // Ouvrir le modal PIN pour authentification
+    setPinError('');
+    setPinModalVisible(true);
+  };
 
-      // 2. Récupérer la clé privée sur le téléphone
-      let privateKeyPem = await getPrivateKey(profile?.username);
+  const handlePinConfirm = async (enteredPin: string) => {
+    const username = profile?.username;
+    if (!username) return;
+
+    // Vérifier le PIN
+    const isValid = await verifyPinForUser(username, enteredPin);
+    if (!isValid) {
+      setPinError('Code PIN incorrect. Réessayez.');
+      return;
+    }
+
+    // PIN correct → fermer le modal et lancer la signature
+    setPinModalVisible(false);
+    setPinError('');
+    setSigning(true);
+
+    try {
+      // Récupérer la clé privée
+      let privateKeyPem = await getPrivateKey(username);
 
       if (!privateKeyPem) {
-        // Option pour générer automatiquement les clés pour cet appareil
         Alert.alert(
           'Clé privée introuvable 🔑',
-          `Aucune clé privée conservée pour "${profile?.username}" sur cet appareil.\n\nSouhaitez-vous générer une nouvelle paire de clés pour ce compte ?`,
+          `Aucune clé privée conservée pour "${username}" sur cet appareil.\n\nSouhaitez-vous générer une nouvelle paire de clés ?`,
           [
             { text: 'Annuler', style: 'cancel', onPress: () => setSigning(false) },
             {
               text: 'Générer mes clés',
               onPress: async () => {
                 try {
-                  const keypair = await generateKeyPair(1024);
-                  await savePrivateKey(keypair.privateKeyPem, profile?.username);
+                  const keypair = await generateKeyPair(256);
+                  await savePrivateKey(keypair.privateKeyPem, username);
                   await api.updatePublicKey(keypair.publicKeyPem);
-                  Alert.alert('Succès', 'Nouvelle clé privée générée et clé publique enregistrée sur le serveur !');
-                  // Réessayer la signature avec la nouvelle clé
+                  Alert.alert('Succès', 'Nouvelle paire de clés générée et enregistrée !');
                   executeSigningProcess(keypair.privateKeyPem);
                 } catch (e: any) {
                   Alert.alert('Erreur', e.message || 'Échec de génération de clés.');
@@ -309,6 +324,16 @@ export default function DocumentDetailScreen({ route, navigation }: any) {
           </View>
         </View>
       </Modal>
+
+      {/* PIN Modal */}
+      <PinModal
+        visible={pinModalVisible}
+        title="Code PIN requis"
+        subtitle="Entrez votre code PIN pour débloquer votre clé privée et signer ce document."
+        onConfirm={handlePinConfirm}
+        onCancel={() => { setPinModalVisible(false); setPinError(''); }}
+        errorMessage={pinError}
+      />
     </ScrollView>
   );
 }

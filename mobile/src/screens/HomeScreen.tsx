@@ -100,9 +100,14 @@ export default function HomeScreen({ navigation }: any) {
           <Text style={styles.headerTitle}>Sign It ✍️</Text>
           <Text style={styles.headerUser}>Connecté : {profile?.username || 'Chargement...'}</Text>
         </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutText}>Déconnexion</Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity style={styles.debugButton} onPress={() => navigation.navigate('DebugStorage')}>
+            <Text style={styles.debugText}>🔍 Debug</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Text style={styles.logoutText}>Déconnexion</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Tabs Filter */}
@@ -215,6 +220,9 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 50, paddingBottom: 16, backgroundColor: '#1e293b' },
   headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#38bdf8' },
   headerUser: { fontSize: 13, color: '#94a3b8', marginTop: 2 },
+  headerButtons: { flexDirection: 'row', gap: 8 },
+  debugButton: { backgroundColor: '#0ea5e9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
+  debugText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   logoutButton: { backgroundColor: '#334155', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
   logoutText: { color: '#f8fafc', fontSize: 12 },
   tabsRow: { flexDirection: 'row', backgroundColor: '#0f172a', padding: 8, borderBottomWidth: 1, borderColor: '#1e293b' },

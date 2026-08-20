@@ -3,6 +3,8 @@ import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator,
 import { api } from '../services/api';
 import { generateKeyPair } from '../services/crypto';
 import { savePrivateKey, saveAccessToken } from '../services/secureStore';
+import { savePinForUser } from '../services/pinService';
+import PinModal from '../components/PinModal';
 
 export default function RegisterScreen({ navigation }: any) {
   const [username, setUsername] = useState('');
@@ -10,34 +12,51 @@ export default function RegisterScreen({ navigation }: any) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [statusText, setStatusText] = useState('');
+  
+  // Modal PIN
+  const [pinModalVisible, setPinModalVisible] = useState(false);
 
-  const handleRegister = async () => {
+  const handleRegister = () => {
     if (!username.trim() || !password.trim()) {
       Alert.alert('Erreur', 'Veuillez renseigner un nom d\'utilisateur et un mot de passe.');
       return;
     }
+    // Ouvrir le modal de configuration du PIN
+    setPinModalVisible(true);
+  };
 
+  const handlePinConfirmed = async (pin: string) => {
+    setPinModalVisible(false);
     setLoading(true);
+
     try {
+      // 1. Sauvegarder le PIN localement
+      setStatusText('🔒 Sauvegarde du code PIN...');
+      await savePinForUser(username.trim(), pin);
+
+      // 2. Générer la paire de clés RSA
       setStatusText('🔑 Génération de votre paire de clés (RSA)...');
       console.log("[Register] Début génération de clés...");
-      const keypair = await generateKeyPair(1024);
+      const keypair = await generateKeyPair(256);
       console.log("[Register] Clés générées avec succès !");
 
-      setStatusText('🔒 Sauvegarde de la clé privée sur le téléphone...');
+      // 3. Sauvegarder la clé privée localement
+      setStatusText('💾 Sauvegarde de la clé privée...');
       await savePrivateKey(keypair.privateKeyPem, username.trim());
 
-      setStatusText('🌐 Envoi de la clé publique au serveur...');
+      // 4. Envoyer la clé publique au serveur
+      setStatusText('🌐 Création du compte sur le serveur...');
       console.log("[Register] Envoi de la clé publique au serveur backend...");
       await api.register(username.trim(), email.trim(), password, keypair.publicKeyPem);
 
+      // 5. Connexion automatique
       setStatusText('⚡ Connexion automatique...');
       const loginData = await api.login(username.trim(), password);
       await saveAccessToken(loginData.access);
 
       Alert.alert(
         'Inscription réussie ! 🔑',
-        'Votre compte a été créé. La clé privée est conservée en sécurité sur votre téléphone.',
+        'Votre compte est créé. Votre clé privée et votre code PIN sont conservés en sécurité sur cet appareil.',
         [{ text: 'Continuer', onPress: () => navigation.replace('Home') }]
       );
     } catch (err: any) {
@@ -94,7 +113,7 @@ export default function RegisterScreen({ navigation }: any) {
 
         <View style={styles.infoBox}>
           <Text style={styles.infoText}>
-            🛡️ Lors de l'inscription, votre téléphone génère une paire de clés cryptographiques. Votre clé privée restera strictement confidentielle sur cet appareil.
+            🛡️ Un code PIN à 4 chiffres sera créé pour sécuriser l'accès à votre clé privée. Votre clé privée restera strictement sur cet appareil.
           </Text>
         </View>
 
@@ -105,7 +124,7 @@ export default function RegisterScreen({ navigation }: any) {
           </View>
         ) : (
           <TouchableOpacity style={styles.button} onPress={handleRegister} activeOpacity={0.8}>
-            <Text style={styles.buttonText}>Générer mes clés & S'inscrire</Text>
+            <Text style={styles.buttonText}>Définir mon PIN & S'inscrire</Text>
           </TouchableOpacity>
         )}
 
@@ -113,6 +132,14 @@ export default function RegisterScreen({ navigation }: any) {
           <Text style={styles.linkText}>Déjà un compte ? Se connecter</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Modal PIN - Mode création (double saisie) */}
+      <PinModal
+        visible={pinModalVisible}
+        isSetup
+        onConfirm={handlePinConfirmed}
+        onCancel={() => setPinModalVisible(false)}
+      />
     </ScrollView>
   );
 }
