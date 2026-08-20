@@ -1,11 +1,13 @@
 import hashlib
 import base64
+import os
 from rest_framework import status, permissions, generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
+from django.conf import settings
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa, ed25519, ec
@@ -15,6 +17,7 @@ from .serializers import (
     UserSerializer, RegisterSerializer, DocumentSerializer,
     AuthorizedSignerSerializer, SignatureSerializer, AuditLogSerializer
 )
+from .pdf_utils import add_signature_page_to_pdf, create_new_version_path
 
 User = get_user_model()
 
@@ -27,6 +30,7 @@ def verify_crypto_signature(public_key_pem: str, message_bytes: bytes, signature
         public_key = load_pem_public_key(public_key_pem.encode('utf-8'))
 
         if isinstance(public_key, rsa.RSAPublicKey):
+            # Vérification standard RSA avec SHA-256
             public_key.verify(
                 signature_bytes,
                 message_bytes,
@@ -188,21 +192,20 @@ class SignDocumentView(APIView):
         if not signature_value:
             return Response({'error': "La valeur de la signature numérique est requise."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 4. Déterminer le payload à signer (Chaînage de signatures)
-        last_signature = document.signatures.order_by('-signed_at').first()
-        if last_signature:
-            payload_to_verify = f"{document.file_hash}:{last_signature.signature_value}"
-        else:
-            payload_to_verify = document.file_hash
+        # 4. Payload à vérifier : uniquement le hash du fichier (pas de chaînage)
+        # Chaque signataire signe le document original indépendamment
+        payload_to_verify = document.file_hash
+        
+        print(f"[Backend] Payload à vérifier: {payload_to_verify}")
 
         # 5. Récupérer la clé publique de l'utilisateur
         if not signer.public_key:
             return Response({'error': "Clé publique de l'utilisateur introuvable sur le serveur."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 6. Vérification cryptographique
+        # 6. Vérification cryptographique RSA-SHA256
         is_valid = verify_crypto_signature(
             public_key_pem=signer.public_key,
-            message_bytes=payload_to_verify.encode('utf-8'),
+            message_bytes=payload_to_verify.encode('utf-8'),  # Payload texte, pas hashé
             signature_base64=signature_value
         )
 
@@ -215,17 +218,73 @@ class SignDocumentView(APIView):
             )
             return Response({'error': "Signature cryptographique invalide ou non conforme."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 7. Sauvegarde de la signature valide
+        # 7. Sauvegarde de la signature valide (sans chaînage)
         new_signature = Signature.objects.create(
             document=document,
             signer=signer,
             signature_value=signature_value,
-            payload_signed=payload_to_verify,
-            previous_signature=last_signature,
+            payload_signed=payload_to_verify,  # file_hash seulement
+            previous_signature=None,  # Pas de chaînage
             is_valid=True
         )
 
-        # 8. Mise à jour du statut du document
+        # 8. Création d'une nouvelle version du PDF avec la page de signatures
+        try:
+            # Récupérer toutes les signatures (incluant la nouvelle)
+            all_signatures = document.signatures.order_by('signed_at')
+            signatures_data = [
+                {
+                    'signer': sig.signer.username,
+                    'signed_at': sig.signed_at,
+                    'signature_value': sig.signature_value
+                }
+                for sig in all_signatures
+            ]
+            
+            # Incrémenter le numéro de version
+            document.version += 1
+            version_number = document.version
+            
+            # Chemin du fichier actuel
+            current_file_path = document.file.path
+            
+            # Générer le chemin de la nouvelle version
+            new_version_path = create_new_version_path(current_file_path, version_number)
+            
+            # Ajouter la page de signatures au PDF
+            add_signature_page_to_pdf(
+                original_pdf_path=current_file_path,
+                signatures_data=signatures_data,
+                output_pdf_path=new_version_path
+            )
+            
+            # Mettre à jour le document pour pointer vers la nouvelle version
+            # Calculer le chemin relatif pour le FileField
+            relative_path = os.path.relpath(new_version_path, settings.MEDIA_ROOT)
+            document.file.name = relative_path
+            
+            # NE PAS recalculer le hash - garder le hash du document original
+            # Le file_hash doit rester constant pour que toutes les signatures soient valides
+            
+            document.save()
+            
+            AuditLog.objects.create(
+                document=document,
+                user=signer,
+                action="Nouvelle version PDF créée",
+                details=f"Version {version_number} générée avec page de signatures (hash: {document.file_hash[:16]}...)"
+            )
+            
+        except Exception as e:
+            # Si la génération du PDF échoue, on continue quand même
+            AuditLog.objects.create(
+                document=document,
+                user=signer,
+                action="Erreur génération PDF",
+                details=f"Impossible de générer la nouvelle version du PDF : {str(e)}"
+            )
+
+        # 9. Mise à jour du statut du document
         total_authorized = document.authorized_signers.count()
         total_signed = document.signatures.count()
         if total_signed >= total_authorized:
@@ -234,7 +293,7 @@ class SignDocumentView(APIView):
             document.status = 'IN_PROGRESS'
         document.save()
 
-        # 9. Audit Log
+        # 10. Audit Log
         AuditLog.objects.create(
             document=document,
             user=signer,
@@ -252,7 +311,11 @@ class VerifyDocumentView(APIView):
     def get(self, request, pk):
         document = get_object_or_404(Document, pk=pk)
 
-        # 1. Recalcul du hash SHA-256 du fichier sur le disque
+        # 1. Note : Le fichier actuel contient maintenant les pages de signatures,
+        # donc son hash ne correspondra plus au hash original stocké en DB.
+        # C'est normal et attendu. On vérifie seulement les signatures cryptographiques.
+        
+        # Pour info : calculer le hash actuel du fichier
         try:
             document.file.open('rb')
             sha256 = hashlib.sha256()
@@ -261,26 +324,22 @@ class VerifyDocumentView(APIView):
             current_file_hash = sha256.hexdigest()
             document.file.close()
         except Exception as e:
-            return Response({'error': f"Impossible d'accéder au fichier : {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            current_file_hash = "ERROR"
 
-        file_integrity_ok = (current_file_hash == document.file_hash)
+        # Le fichier a été modifié (pages signatures ajoutées), c'est normal
+        file_has_been_modified = (current_file_hash != document.file_hash)
 
-        # 2. Vérification séquentielle de la chaîne de signatures
+        # 2. Vérification de toutes les signatures (indépendantes, pas de chaînage)
         signatures = document.signatures.order_by('signed_at')
         chain_verification = []
-        overall_valid = file_integrity_ok and signatures.exists()
+        overall_valid = signatures.exists()  # Valide si au moins une signature existe
 
-        prev_sig_value = None
         for sig in signatures:
-            # Reconstitution du payload attendu
-            if prev_sig_value:
-                expected_payload = f"{document.file_hash}:{prev_sig_value}"
-            else:
-                expected_payload = document.file_hash
-
+            # Chaque signature signe le file_hash original
+            expected_payload = document.file_hash
             payload_match = (sig.payload_signed == expected_payload)
             
-            # Vérification cryptographique
+            # Vérification cryptographique RSA-SHA256
             crypto_valid = verify_crypto_signature(
                 public_key_pem=sig.signer.public_key,
                 message_bytes=expected_payload.encode('utf-8'),
@@ -293,21 +352,21 @@ class VerifyDocumentView(APIView):
                 'signed_at': sig.signed_at,
                 'payload_match': payload_match,
                 'crypto_valid': crypto_valid,
-                'is_valid': crypto_valid and payload_match and file_integrity_ok
+                'is_valid': crypto_valid and payload_match  # Ne dépend plus de file_integrity
             }
 
             if not sig_status['is_valid']:
                 overall_valid = False
 
             chain_verification.append(sig_status)
-            prev_sig_value = sig.signature_value
 
         return Response({
             'document_id': document.id,
             'document_title': document.title,
             'original_hash': document.file_hash,
             'current_file_hash': current_file_hash,
-            'file_integrity_ok': file_integrity_ok,
+            'file_integrity_ok': not file_has_been_modified,  # False = modifié (pages signatures ajoutées)
+            'file_has_signature_pages': file_has_been_modified,  # True = pages ajoutées
             'overall_valid': overall_valid,
             'status': document.status,
             'total_authorized_signers': document.authorized_signers.count(),

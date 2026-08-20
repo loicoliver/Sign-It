@@ -19,6 +19,7 @@ class Document(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_documents')
     file_hash = models.CharField(max_length=64, help_text="Empreinte SHA-256 du fichier d'origine")
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='PENDING')
+    version = models.IntegerField(default=1, help_text="Numéro de version du document (incrémenté à chaque signature)")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
