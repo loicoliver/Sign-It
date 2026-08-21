@@ -6,6 +6,7 @@ import { savePrivateKey, saveAccessToken } from '../services/secureStore';
 import { savePinForUser } from '../services/pinService';
 import { getAuthenticationMessage } from '../services/biometricsAuth';
 import PinModal from '../components/PinModal';
+import { theme } from '../theme';
 
 export default function RegisterScreen({ navigation }: any) {
   const [username, setUsername] = useState('');
@@ -15,7 +16,6 @@ export default function RegisterScreen({ navigation }: any) {
   const [statusText, setStatusText] = useState('');
   const [authMessage, setAuthMessage] = useState('');
   
-  // Modal PIN
   const [pinModalVisible, setPinModalVisible] = useState(false);
 
   useEffect(() => {
@@ -32,7 +32,6 @@ export default function RegisterScreen({ navigation }: any) {
       Alert.alert('Erreur', 'Veuillez renseigner un nom d\'utilisateur et un mot de passe.');
       return;
     }
-    // Ouvrir le modal de configuration du PIN
     setPinModalVisible(true);
   };
 
@@ -41,38 +40,29 @@ export default function RegisterScreen({ navigation }: any) {
     setLoading(true);
 
     try {
-      // 1. Sauvegarder le PIN localement
       setStatusText('🔒 Sauvegarde du code PIN...');
       await savePinForUser(username.trim(), pin);
 
-      // 2. Générer la paire de clés RSA
-      setStatusText('🔑 Génération de votre paire de clés (RSA)...');
-      console.log("[Register] Début génération de clés...");
+      setStatusText('🔑 Génération de votre paire de clés...');
       const keypair = await generateKeyPair(1024);
-      console.log("[Register] Clés générées avec succès !");
 
-      // 3. Sauvegarder la clé privée localement
       setStatusText('💾 Sauvegarde de la clé privée...');
       await savePrivateKey(keypair.privateKeyPem, username.trim());
 
-      // 4. Envoyer la clé publique au serveur
-      setStatusText('🌐 Création du compte sur le serveur...');
-      console.log("[Register] Envoi de la clé publique au serveur backend...");
+      setStatusText('🌐 Création du compte...');
       await api.register(username.trim(), email.trim(), password, keypair.publicKeyPem);
 
-      // 5. Connexion automatique
-      setStatusText('⚡ Connexion automatique...');
+      setStatusText('⚡ Connexion...');
       const loginData = await api.login(username.trim(), password);
       await saveAccessToken(loginData.access);
 
       Alert.alert(
-        'Inscription réussie ! 🔑',
-        'Votre compte est créé. Votre clé privée et votre code PIN sont conservés en sécurité sur cet appareil.',
+        'Inscription réussie',
+        'Votre compte est créé. Votre clé privée et votre code PIN sont sécurisés.',
         [{ text: 'Continuer', onPress: () => navigation.replace('Home') }]
       );
     } catch (err: any) {
-      console.error("[Register Error]", err);
-      Alert.alert('Échec de l\'inscription', err.message || 'Impossible de se connecter au serveur backend.');
+      Alert.alert('Échec de l\'inscription', err.message || 'Impossible de se connecter au serveur.');
     } finally {
       setLoading(false);
       setStatusText('');
@@ -81,68 +71,72 @@ export default function RegisterScreen({ navigation }: any) {
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
-      <View style={styles.card}>
-        <Text style={styles.title}>Créer un compte Sign It 🔐</Text>
-        <Text style={styles.subtitle}>Génération de votre identité cryptographique</Text>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Nom d'utilisateur</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="ex: bob"
-            placeholderTextColor="#64748b"
-            value={username}
-            onChangeText={setUsername}
-            autoCapitalize="none"
-          />
+      <View style={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.logo}>🔐</Text>
+          <Text style={styles.title}>Créer un compte</Text>
+          <Text style={styles.subtitle}>Génération de votre identité cryptographique</Text>
         </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Adresse Email (optionnel)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="bob@example.com"
-            placeholderTextColor="#64748b"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Mot de passe</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="••••••••"
-            placeholderTextColor="#64748b"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
-        </View>
-
-        <View style={styles.infoBox}>
-          <Text style={styles.infoText}>{authMessage}</Text>
-        </View>
-
-        {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color="#38bdf8" />
-            <Text style={styles.loadingText}>{statusText}</Text>
+        <View style={styles.form}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Nom d'utilisateur</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Entrez votre nom d'utilisateur"
+              placeholderTextColor={theme.colors.gray400}
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+            />
           </View>
-        ) : (
-          <TouchableOpacity style={styles.button} onPress={handleRegister} activeOpacity={0.8}>
-            <Text style={styles.buttonText}>Définir mon PIN & S'inscrire</Text>
-          </TouchableOpacity>
-        )}
 
-        <TouchableOpacity style={styles.linkButton} onPress={() => navigation.navigate('Login')}>
-          <Text style={styles.linkText}>Déjà un compte ? Se connecter</Text>
-        </TouchableOpacity>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Adresse Email (optionnel)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="votre@email.com"
+              placeholderTextColor={theme.colors.gray400}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Mot de passe</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Entrez votre mot de passe"
+              placeholderTextColor={theme.colors.gray400}
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+            />
+          </View>
+
+          <View style={styles.infoBox}>
+            <Text style={styles.infoText}>{authMessage}</Text>
+          </View>
+
+          {loading ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator size="large" color={theme.colors.black} />
+              <Text style={styles.loadingText}>{statusText}</Text>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.button} onPress={handleRegister}>
+              <Text style={styles.buttonText}>Définir mon PIN & S'inscrire</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity style={styles.linkButton} onPress={() => navigation.navigate('Login')}>
+            <Text style={styles.linkText}>Déjà un compte ? <Text style={styles.linkTextBold}>Se connecter</Text></Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Modal PIN - Mode création (double saisie) */}
       <PinModal
         visible={pinModalVisible}
         isSetup
@@ -154,19 +148,100 @@ export default function RegisterScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: { flexGrow: 1, backgroundColor: '#0f172a', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  card: { backgroundColor: '#1e293b', width: '100%', maxWidth: 400, borderRadius: 16, padding: 24 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#f8fafc', textAlign: 'center', marginBottom: 6 },
-  subtitle: { fontSize: 13, color: '#94a3b8', textAlign: 'center', marginBottom: 24 },
-  inputGroup: { marginBottom: 14 },
-  label: { fontSize: 13, color: '#cbd5e1', marginBottom: 6, fontWeight: '600' },
-  input: { backgroundColor: '#0f172a', color: '#f8fafc', paddingHorizontal: 14, paddingVertical: 12, borderRadius: 8, borderWidth: 1, borderColor: '#334155', fontSize: 15 },
-  infoBox: { backgroundColor: '#0284c715', borderColor: '#0284c740', borderWidth: 1, padding: 12, borderRadius: 8, marginVertical: 12 },
-  infoText: { color: '#38bdf8', fontSize: 12, lineHeight: 18 },
-  loadingBox: { alignItems: 'center', marginVertical: 16 },
-  loadingText: { color: '#38bdf8', fontSize: 13, marginTop: 10, textAlign: 'center', fontWeight: '600' },
-  button: { backgroundColor: '#0284c7', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginTop: 10 },
-  buttonText: { color: '#ffffff', fontWeight: 'bold', fontSize: 15 },
-  linkButton: { marginTop: 16, alignItems: 'center' },
-  linkText: { color: '#38bdf8', fontSize: 14 }
+  scrollContainer: { 
+    flexGrow: 1, 
+    backgroundColor: theme.colors.background,
+    paddingVertical: theme.spacing.xxl,
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.lg,
+    maxWidth: 440,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: theme.spacing.xl,
+  },
+  logo: {
+    fontSize: 56,
+    marginBottom: theme.spacing.sm,
+    display: 'none',
+  },
+  title: {
+    ...theme.typography.h2,
+    marginBottom: theme.spacing.xs,
+  },
+  subtitle: {
+    ...theme.typography.small,
+    textAlign: 'center',
+  },
+  form: {
+    gap: theme.spacing.sm,
+  },
+  inputGroup: { 
+    marginBottom: theme.spacing.md,
+  },
+  label: { 
+    ...theme.typography.bodyMedium,
+    marginBottom: theme.spacing.sm,
+  },
+  input: { 
+    backgroundColor: theme.colors.white,
+    color: theme.colors.text,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 14,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    fontSize: 16,
+  },
+  infoBox: { 
+    backgroundColor: theme.colors.gray100,
+    borderColor: theme.colors.border,
+    borderWidth: 1,
+    padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
+    marginVertical: theme.spacing.md,
+  },
+  infoText: { 
+    ...theme.typography.small,
+    lineHeight: 20,
+  },
+  loadingBox: { 
+    alignItems: 'center',
+    paddingVertical: theme.spacing.lg,
+  },
+  loadingText: { 
+    ...theme.typography.body,
+    marginTop: theme.spacing.md,
+    textAlign: 'center',
+  },
+  button: { 
+    backgroundColor: theme.colors.black,
+    paddingVertical: 16,
+    borderRadius: theme.borderRadius.md,
+    alignItems: 'center',
+    marginTop: theme.spacing.md,
+  },
+  buttonText: { 
+    color: theme.colors.white,
+    fontWeight: '600',
+    fontSize: 16,
+    letterSpacing: 0.3,
+  },
+  linkButton: { 
+    marginTop: theme.spacing.lg,
+    alignItems: 'center',
+  },
+  linkText: { 
+    ...theme.typography.body,
+    color: theme.colors.textSecondary,
+  },
+  linkTextBold: {
+    fontWeight: '600',
+    color: theme.colors.black,
+  },
 });

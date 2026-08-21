@@ -31,20 +31,20 @@ export default function App() {
 
   if (!initialRoute) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#0f172a', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#38bdf8" />
+      <View style={{ flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#000000" />
       </View>
     );
   }
 
   return (
     <NavigationContainer>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <Stack.Navigator
         initialRouteName={initialRoute}
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: '#0f172a' }
+          contentStyle: { backgroundColor: '#FFFFFF' }
         }}
       >
         <Stack.Screen name="Login" component={LoginScreen} />

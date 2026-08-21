@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { api } from '../services/api';
 import { saveAccessToken } from '../services/secureStore';
+import { theme } from '../theme';
 
 export default function LoginScreen({ navigation }: any) {
   const [username, setUsername] = useState('');
@@ -28,58 +29,128 @@ export default function LoginScreen({ navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.logoTitle}>Sign It ✍️</Text>
-        <Text style={styles.subtitle}>Signature électronique sécurisée</Text>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Nom d'utilisateur</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="ex: alice"
-            value={username}
-            onChangeText={setUsername}
-            autoCapitalize="none"
-          />
+      <View style={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.logo}>✍️</Text>
+          <Text style={styles.title}>Sign It</Text>
+          <Text style={styles.subtitle}>Signature électronique sécurisée</Text>
         </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Mot de passe</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="••••••••"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
+        <View style={styles.form}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Nom d'utilisateur</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Entrez votre nom d'utilisateur"
+              placeholderTextColor={theme.colors.gray400}
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Mot de passe</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Entrez votre mot de passe"
+              placeholderTextColor={theme.colors.gray400}
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+            />
+          </View>
+
+          <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.buttonText}>Se connecter</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.linkButton} onPress={() => navigation.navigate('Register')}>
+            <Text style={styles.linkText}>Pas encore de compte ? <Text style={styles.linkTextBold}>S'inscrire</Text></Text>
+          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color="#FFF" />
-          ) : (
-            <Text style={styles.buttonText}>Se connecter</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.linkButton} onPress={() => navigation.navigate('Register')}>
-          <Text style={styles.linkText}>Pas encore de compte ? S'inscrire</Text>
-        </TouchableOpacity>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  card: { backgroundColor: '#1e293b', width: '100%', maxWidth: 400, borderRadius: 16, padding: 24, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10 },
-  logoTitle: { fontSize: 32, fontWeight: 'bold', color: '#38bdf8', textAlign: 'center', marginBottom: 6 },
-  subtitle: { fontSize: 14, color: '#94a3b8', textAlign: 'center', marginBottom: 28 },
-  inputGroup: { marginBottom: 16 },
-  label: { fontSize: 13, color: '#cbd5e1', marginBottom: 6, fontWeight: '600' },
-  input: { backgroundColor: '#0f172a', color: '#f8fafc', paddingHorizontal: 14, paddingVertical: 12, borderRadius: 8, borderWidth: 1, borderColor: '#334155', fontSize: 15 },
-  button: { backgroundColor: '#2563eb', paddingVertical: 14, borderRadius: 8, alignItems: 'center', marginTop: 12 },
-  buttonText: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 },
-  linkButton: { marginTop: 18, alignItems: 'center' },
-  linkText: { color: '#38bdf8', fontSize: 14 }
+  container: { 
+    flex: 1, 
+    backgroundColor: theme.colors.background,
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.lg,
+    maxWidth: 440,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: theme.spacing.xxl,
+  },
+  logo: {
+    fontSize: 64,
+    marginBottom: theme.spacing.sm,
+    display: 'none',
+  },
+  title: {
+    ...theme.typography.h1,
+    marginBottom: theme.spacing.xs,
+  },
+  subtitle: {
+    ...theme.typography.small,
+    textAlign: 'center',
+  },
+  form: {
+    gap: theme.spacing.md,
+  },
+  inputGroup: { 
+    marginBottom: theme.spacing.md,
+  },
+  label: { 
+    ...theme.typography.bodyMedium,
+    marginBottom: theme.spacing.sm,
+  },
+  input: { 
+    backgroundColor: theme.colors.white,
+    color: theme.colors.text,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 14,
+    borderRadius: theme.borderRadius.md,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+    fontSize: 16,
+  },
+  button: { 
+    backgroundColor: theme.colors.black,
+    paddingVertical: 16,
+    borderRadius: theme.borderRadius.md,
+    alignItems: 'center',
+    marginTop: theme.spacing.md,
+  },
+  buttonText: { 
+    color: theme.colors.white,
+    fontWeight: '600',
+    fontSize: 16,
+    letterSpacing: 0.3,
+  },
+  linkButton: { 
+    marginTop: theme.spacing.lg,
+    alignItems: 'center',
+  },
+  linkText: { 
+    ...theme.typography.body,
+    color: theme.colors.textSecondary,
+  },
+  linkTextBold: {
+    fontWeight: '600',
+    color: theme.colors.black,
+  },
 });

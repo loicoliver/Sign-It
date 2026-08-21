@@ -3,17 +3,23 @@ import { getAccessToken } from './secureStore';
 
 // Auto-détection de l'IP du serveur de dev (ex: 192.168.1.185) pour Expo Go sur téléphone physique
 function getBackendBaseUrl(): string {
-  const hostUri = Constants.expoConfig?.hostUri || (Constants.manifest as any)?.debuggerHost;
-  if (hostUri) {
-    const ip = hostUri.split(':')[0];
-    return `http://${ip}:8000/api`;
+  try {
+    const hostUri = Constants.expoConfig?.hostUri || (Constants.manifest as any)?.debuggerHost;
+    if (hostUri) {
+      const ip = hostUri.split(':')[0];
+      return `http://${ip}:8000/api`;
+    }
+  } catch (e) {
+    console.warn('[API] Unable to detect host IP:', e);
   }
   return 'http://localhost:8000/api';
 }
 
 export const API_BASE_URL = getBackendBaseUrl();
+console.log('[API] Backend URL detected:', API_BASE_URL);
 export const FALLBACK_URLS = [
   API_BASE_URL,
+  'http://192.168.1.162:8000/api',
   'http://localhost:8000/api',
   'http://10.0.2.2:8000/api'
 ];
