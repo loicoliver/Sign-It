@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Animated,
 } from 'react-native';
-import { theme } from '../theme';
 
 interface PinModalProps {
   visible: boolean;
@@ -191,54 +190,23 @@ export default function PinModal({
 }
 
 const styles = StyleSheet.create({
-  overlay: { 
-    flex: 1, 
-    backgroundColor: 'rgba(0, 0, 0, 0.5)', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    padding: theme.spacing.lg 
-  },
-  card: { 
-    backgroundColor: theme.colors.white, 
-    borderRadius: theme.borderRadius.xl, 
-    padding: 28, 
-    width: '100%', 
-    maxWidth: 340, 
-    alignItems: 'center' 
-  },
-  lockIcon: { fontSize: 40, marginBottom: theme.spacing.md },
-  title: { ...theme.typography.h3, color: theme.colors.black, textAlign: 'center', marginBottom: 6 },
-  subtitle: { ...theme.typography.small, color: theme.colors.textSecondary, textAlign: 'center', marginBottom: theme.spacing.md, lineHeight: 18 },
-  dotsRow: { flexDirection: 'row', justifyContent: 'center', marginBottom: theme.spacing.md, gap: theme.spacing.md },
-  dot: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: theme.colors.black },
+  overlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.85)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  card: { backgroundColor: '#1e293b', borderRadius: 20, padding: 28, width: '100%', maxWidth: 340, alignItems: 'center' },
+  lockIcon: { fontSize: 40, marginBottom: 12 },
+  title: { fontSize: 18, fontWeight: 'bold', color: '#f8fafc', textAlign: 'center', marginBottom: 6 },
+  subtitle: { fontSize: 13, color: '#94a3b8', textAlign: 'center', marginBottom: 16, lineHeight: 18 },
+  dotsRow: { flexDirection: 'row', justifyContent: 'center', marginBottom: 12, gap: 16 },
+  dot: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: '#38bdf8' },
   dotEmpty: { backgroundColor: 'transparent' },
-  dotFilled: { backgroundColor: theme.colors.black },
-  errorText: { ...theme.typography.small, color: theme.colors.gray700, textAlign: 'center', marginBottom: theme.spacing.sm, fontWeight: '600' },
-  keyboard: { marginTop: theme.spacing.md, width: '100%' },
-  keyboardRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: theme.spacing.md },
-  key: { 
-    width: 72, 
-    height: 72, 
-    borderRadius: 36, 
-    backgroundColor: theme.colors.gray100,
-    borderWidth: 1,
-    borderColor: theme.colors.border, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
-  },
-  keyText: { ...theme.typography.h2, color: theme.colors.black },
-  keyDelete: { 
-    width: 72, 
-    height: 72, 
-    borderRadius: 36, 
-    backgroundColor: theme.colors.white,
-    borderWidth: 1,
-    borderColor: theme.colors.border, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
-  },
-  keyDeleteText: { fontSize: 22, color: theme.colors.black },
+  dotFilled: { backgroundColor: '#38bdf8' },
+  errorText: { color: '#f87171', fontSize: 13, textAlign: 'center', marginBottom: 8, fontWeight: '600' },
+  keyboard: { marginTop: 12, width: '100%' },
+  keyboardRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 12 },
+  key: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' },
+  keyText: { fontSize: 24, fontWeight: '600', color: '#f8fafc' },
+  keyDelete: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#1e3a5f', justifyContent: 'center', alignItems: 'center' },
+  keyDeleteText: { fontSize: 22, color: '#38bdf8' },
   keyPlaceholder: { width: 72, height: 72 },
-  cancelButton: { marginTop: theme.spacing.md, paddingVertical: theme.spacing.sm, paddingHorizontal: theme.spacing.xl },
-  cancelText: { ...theme.typography.bodyMedium, color: theme.colors.textSecondary },
+  cancelButton: { marginTop: 16, paddingVertical: 10, paddingHorizontal: 32 },
+  cancelText: { color: '#64748b', fontSize: 15, fontWeight: '600' },
 });
