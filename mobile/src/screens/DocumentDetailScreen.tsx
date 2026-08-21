@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, FlatList } from 'react-native';
 import { api } from '../services/api';
 import { getPrivateKey, savePrivateKey } from '../services/secureStore';
-import { signPayload, generateKeyPair } from '../services/crypto';
+import { signPayload, generateKeyPair, computeSha256Hex } from '../services/crypto';
+import { authenticateUser, getAuthenticationMessage } from '../services/biometricsAuth';
 import { verifyPinForUser } from '../services/pinService';
 import PinModal from '../components/PinModal';
 
@@ -22,7 +23,7 @@ export default function DocumentDetailScreen({ route, navigation }: any) {
   const [verifyResult, setVerifyResult] = useState<any>(null);
   const [verifying, setVerifying] = useState(false);
 
-  // PIN Modal
+  // PIN Modal (fallback si pas de biométrie)
   const [pinModalVisible, setPinModalVisible] = useState(false);
   const [pinError, setPinError] = useState('');
 
@@ -71,10 +72,42 @@ export default function DocumentDetailScreen({ route, navigation }: any) {
     }
   };
 
-  const handleSignDocument = () => {
-    // Ouvrir le modal PIN pour authentification
-    setPinError('');
-    setPinModalVisible(true);
+  const handleSignDocument = async () => {
+    const username = profile?.username;
+    if (!username) return;
+
+    setSigning(true);
+
+    try {
+      // 1. Essayer authentification biométrique (Face ID/Empreinte)
+      const authResult = await authenticateUser(username, {
+        promptMessage: 'Authentifiez-vous pour signer le document',
+        fallbackLabel: 'Utiliser le code PIN',
+      });
+
+      if (authResult.success) {
+        // Authentification biométrique réussie
+        console.log(`[Auth] Authentifié avec ${authResult.method}`);
+        await proceedWithSigning(username);
+        return;
+      }
+
+      // 2. Si biométrie échoue/annulée et que c'est pas un fallback PIN
+      if (authResult.method !== 'pin') {
+        Alert.alert('Authentification annulée', authResult.message);
+        setSigning(false);
+        return;
+      }
+
+      // 3. Fallback : Demander le code PIN
+      setPinError('');
+      setPinModalVisible(true);
+      setSigning(false); // On réactivera lors de la confirmation du PIN
+    } catch (err: any) {
+      console.error('[Auth Error]', err);
+      Alert.alert('Erreur', 'Impossible d\'authentifier. Veuillez réessayer.');
+      setSigning(false);
+    }
   };
 
   const handlePinConfirm = async (enteredPin: string) => {
@@ -93,6 +126,10 @@ export default function DocumentDetailScreen({ route, navigation }: any) {
     setPinError('');
     setSigning(true);
 
+    await proceedWithSigning(username);
+  };
+
+  const proceedWithSigning = async (username: string) => {
     try {
       // Récupérer la clé privée
       let privateKeyPem = await getPrivateKey(username);
@@ -107,7 +144,7 @@ export default function DocumentDetailScreen({ route, navigation }: any) {
               text: 'Générer mes clés',
               onPress: async () => {
                 try {
-                  const keypair = await generateKeyPair(256);
+                  const keypair = await generateKeyPair(1024);
                   await savePrivateKey(keypair.privateKeyPem, username);
                   await api.updatePublicKey(keypair.publicKeyPem);
                   Alert.alert('Succès', 'Nouvelle paire de clés générée et enregistrée !');
@@ -132,15 +169,28 @@ export default function DocumentDetailScreen({ route, navigation }: any) {
 
   const executeSigningProcess = async (privateKeyPem: string) => {
     try {
-      // 3. Déterminer le payload à signer (Dépendance de la dernière signature)
+      // 3. Construire le payload avec chaînage de signatures
       const lastSignature = document.signatures?.[document.signatures.length - 1];
-      let payloadToSign = document.file_hash;
+      let payloadToSign: string;
+      
       if (lastSignature) {
+        // Chaînage : signer document + signature précédente
         payloadToSign = `${document.file_hash}:${lastSignature.signature_value}`;
+        console.log('[Sign] Chaînage activé - signature précédente incluse');
+      } else {
+        // Première signature : signer seulement le document
+        payloadToSign = document.file_hash;
+        console.log('[Sign] Première signature du document');
       }
 
-      // 4. Calculer la signature numérique RSA-SHA256
-      const signatureBase64 = signPayload(privateKeyPem, payloadToSign);
+      console.log('[Sign] Payload brut:', payloadToSign.substring(0, 80) + '...');
+      
+      // 3.5 Hasher le payload pour le réduire (compatible RSA 1024-bit)
+      const payloadHash = computeSha256Hex(payloadToSign);
+      console.log('[Sign] Payload hashé (SHA-256):', payloadHash);
+
+      // 4. Signer le HASH du payload (pas le payload brut)
+      const signatureBase64 = signPayload(privateKeyPem, payloadHash);
 
       // 5. Transmettre au serveur Django
       await api.signDocument(documentId, signatureBase64);
@@ -305,7 +355,12 @@ export default function DocumentDetailScreen({ route, navigation }: any) {
                   </Text>
                 </View>
 
-                <Text style={styles.verifyDetailText}>Fichier d'origine intact : {verifyResult.file_integrity_ok ? 'Oui' : 'Non (ALTÉRÉ !)'}</Text>
+                <Text style={styles.verifyDetailText}>
+                  Document original signé : Oui (hash: {verifyResult.original_hash?.substring(0, 16)}...)
+                </Text>
+                <Text style={styles.verifyDetailText}>
+                  Pages signatures ajoutées : {verifyResult.file_has_signature_pages ? 'Oui' : 'Non'}
+                </Text>
                 <Text style={styles.verifyDetailText}>Signatures totales : {verifyResult.total_signatures}</Text>
 
                 <Text style={[styles.cardHeader, { marginTop: 12 }]}>Détail des signatures :</Text>

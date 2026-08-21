@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { api } from '../services/api';
 import { generateKeyPair } from '../services/crypto';
 import { savePrivateKey, saveAccessToken } from '../services/secureStore';
 import { savePinForUser } from '../services/pinService';
+import { getAuthenticationMessage } from '../services/biometricsAuth';
 import PinModal from '../components/PinModal';
 
 export default function RegisterScreen({ navigation }: any) {
@@ -12,9 +13,19 @@ export default function RegisterScreen({ navigation }: any) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [statusText, setStatusText] = useState('');
+  const [authMessage, setAuthMessage] = useState('');
   
   // Modal PIN
   const [pinModalVisible, setPinModalVisible] = useState(false);
+
+  useEffect(() => {
+    loadAuthMessage();
+  }, []);
+
+  const loadAuthMessage = async () => {
+    const message = await getAuthenticationMessage();
+    setAuthMessage(message);
+  };
 
   const handleRegister = () => {
     if (!username.trim() || !password.trim()) {
@@ -37,7 +48,7 @@ export default function RegisterScreen({ navigation }: any) {
       // 2. Générer la paire de clés RSA
       setStatusText('🔑 Génération de votre paire de clés (RSA)...');
       console.log("[Register] Début génération de clés...");
-      const keypair = await generateKeyPair(256);
+      const keypair = await generateKeyPair(1024);
       console.log("[Register] Clés générées avec succès !");
 
       // 3. Sauvegarder la clé privée localement
@@ -112,9 +123,7 @@ export default function RegisterScreen({ navigation }: any) {
         </View>
 
         <View style={styles.infoBox}>
-          <Text style={styles.infoText}>
-            🛡️ Un code PIN à 4 chiffres sera créé pour sécuriser l'accès à votre clé privée. Votre clé privée restera strictement sur cet appareil.
-          </Text>
+          <Text style={styles.infoText}>{authMessage}</Text>
         </View>
 
         {loading ? (

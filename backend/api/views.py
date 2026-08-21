@@ -192,20 +192,32 @@ class SignDocumentView(APIView):
         if not signature_value:
             return Response({'error': "La valeur de la signature numérique est requise."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 4. Payload à vérifier : uniquement le hash du fichier (pas de chaînage)
-        # Chaque signataire signe le document original indépendamment
-        payload_to_verify = document.file_hash
+        # 4. Construire le payload attendu avec chaînage de signatures
+        last_signature = document.signatures.order_by('-signed_at').first()
+        if last_signature:
+            # Chaînage : document + signature précédente
+            payload_to_verify = f"{document.file_hash}:{last_signature.signature_value}"
+            print(f"[Backend] Chaînage activé - payload: {payload_to_verify[:80]}...")
+        else:
+            # Première signature : seulement le document
+            payload_to_verify = document.file_hash
+            print(f"[Backend] Première signature - payload: {payload_to_verify}")
         
-        print(f"[Backend] Payload à vérifier: {payload_to_verify}")
+        # 4.5 Hasher le payload (comme fait côté mobile)
+        payload_hash_bytes = hashlib.sha256(payload_to_verify.encode('utf-8')).digest()
+        payload_hash_hex = payload_hash_bytes.hex()
+        print(f"[Backend] Payload hashé (SHA-256): {payload_hash_hex}")
 
         # 5. Récupérer la clé publique de l'utilisateur
         if not signer.public_key:
             return Response({'error': "Clé publique de l'utilisateur introuvable sur le serveur."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 6. Vérification cryptographique RSA-SHA256
+        # 6. Vérification cryptographique RSA-SHA256 sur le HASH
+        # Le mobile a signé signPayload(privateKey, hash_hex)
+        # signPayload fait déjà un SHA-256, donc on vérifie sur le hash_hex en texte
         is_valid = verify_crypto_signature(
             public_key_pem=signer.public_key,
-            message_bytes=payload_to_verify.encode('utf-8'),  # Payload texte, pas hashé
+            message_bytes=payload_hash_hex.encode('utf-8'),  # Hash hex en string
             signature_base64=signature_value
         )
 
@@ -218,13 +230,13 @@ class SignDocumentView(APIView):
             )
             return Response({'error': "Signature cryptographique invalide ou non conforme."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 7. Sauvegarde de la signature valide (sans chaînage)
+        # 7. Sauvegarde de la signature valide avec chaînage
         new_signature = Signature.objects.create(
             document=document,
             signer=signer,
             signature_value=signature_value,
-            payload_signed=payload_to_verify,  # file_hash seulement
-            previous_signature=None,  # Pas de chaînage
+            payload_signed=payload_to_verify,  # Payload complet (avec chaînage)
+            previous_signature=last_signature,  # Lien vers signature précédente
             is_valid=True
         )
 
@@ -329,20 +341,28 @@ class VerifyDocumentView(APIView):
         # Le fichier a été modifié (pages signatures ajoutées), c'est normal
         file_has_been_modified = (current_file_hash != document.file_hash)
 
-        # 2. Vérification de toutes les signatures (indépendantes, pas de chaînage)
+        # 2. Vérification séquentielle de la chaîne de signatures (avec chaînage)
         signatures = document.signatures.order_by('signed_at')
         chain_verification = []
         overall_valid = signatures.exists()  # Valide si au moins une signature existe
 
+        prev_sig_value = None
         for sig in signatures:
-            # Chaque signature signe le file_hash original
-            expected_payload = document.file_hash
+            # Reconstituer le payload attendu avec chaînage
+            if prev_sig_value:
+                expected_payload = f"{document.file_hash}:{prev_sig_value}"
+            else:
+                expected_payload = document.file_hash
+            
+            # Hasher le payload comme fait lors de la signature
+            expected_payload_hash_hex = hashlib.sha256(expected_payload.encode('utf-8')).hexdigest()
+
             payload_match = (sig.payload_signed == expected_payload)
             
-            # Vérification cryptographique RSA-SHA256
+            # Vérification cryptographique RSA-SHA256 sur le hash hex
             crypto_valid = verify_crypto_signature(
                 public_key_pem=sig.signer.public_key,
-                message_bytes=expected_payload.encode('utf-8'),
+                message_bytes=expected_payload_hash_hex.encode('utf-8'),
                 signature_base64=sig.signature_value
             )
 
@@ -359,6 +379,9 @@ class VerifyDocumentView(APIView):
                 overall_valid = False
 
             chain_verification.append(sig_status)
+            
+            # Mémoriser cette signature pour le chaînage suivant
+            prev_sig_value = sig.signature_value
 
         return Response({
             'document_id': document.id,
